@@ -1,0 +1,45 @@
+# Legal IPC-RAG: Windows Dependencies
+# Use: pip install -r requirements_windows.txt
+
+# Core ML and LLM
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch
+transformers
+peft
+trl
+sentence-transformers
+bitsandbytes; sys_platform != 'win32'
+bitsandbytes-windows; sys_platform == 'win32'
+faiss-cpu
+datasets
+evaluate
+accelerate
+
+# Database & Retrieval
+chromadb
+rank-bm25
+
+# Backend & API
+fastapi
+uvicorn
+groq
+python-dotenv
+
+# Frontend
+streamlit
+plotly
+pandas
+numpy
+
+# Document Processing
+PyMuPDF
+PyPDF2
+python-docx
+spacy
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+# Utilities
+tqdm
+scikit-learn
+matplotlib
+jinja2
