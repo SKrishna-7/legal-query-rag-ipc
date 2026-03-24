@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+venv/
+.venv/
+env/
+.env
+dino/
+
+# Data and Models
+data/
+models/
+hf_home/
+logs/
+
+# Documents & Large files
+*.pdf
+*.docx
+*.pptx
+*.zip
+*.csv
+*.parquet
+*.safetensors
+*.bin
+*.sqlite3
+
+# Other projects
+Legal-Query-RAG-main/
+Legal-Query-RAG-main.zip
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
