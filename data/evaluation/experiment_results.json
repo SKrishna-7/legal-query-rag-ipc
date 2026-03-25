@@ -1,0 +1,63 @@
+[
+  {
+    "experiment_name": "Retrieval_Benchmarking",
+    "metrics": {
+      "Semantic_Hit@5": 0.5,
+      "Hybrid_Hit@5": 0.5,
+      "Retrieval_Lift": 0.0
+    },
+    "details": []
+  },
+  {
+    "experiment_name": "IPC_CAM_Alignment",
+    "metrics": {
+      "Alignment_Accuracy": 1.0,
+      "Avg_Alignment_Score": 0.8333333333333334
+    },
+    "details": [
+      {
+        "section": "323",
+        "predicted": "FULLY_ALIGNED",
+        "ground_truth": "FULLY_ALIGNED",
+        "score": 1.0
+      },
+      {
+        "section": "378",
+        "predicted": "FULLY_ALIGNED",
+        "ground_truth": "FULLY_ALIGNED",
+        "score": 1.0
+      },
+      {
+        "section": "120B",
+        "predicted": "FULLY_ALIGNED",
+        "ground_truth": "FULLY_ALIGNED",
+        "score": 1.0
+      },
+      {
+        "section": "307",
+        "predicted": "MISALIGNED",
+        "ground_truth": "MISALIGNED",
+        "score": 0.3333333333333333
+      }
+    ]
+  },
+  {
+    "experiment_name": "Misuse_Detection",
+    "metrics": {
+      "Misuse_Precision": 1.0,
+      "Misuse_Recall": 1.0,
+      "Misuse_F1": 1.0,
+      "Accuracy": 1.0
+    },
+    "details": []
+  },
+  {
+    "experiment_name": "Latency_Analysis",
+    "metrics": {
+      "Latency_Retrieval_Sec": 0.07893085479736328,
+      "Latency_CAM_Sec": 1.1945672035217285,
+      "Latency_Total_Backend_Sec": 1.4155333042144775
+    },
+    "details": []
+  }
+]
