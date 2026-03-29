@@ -43,7 +43,7 @@ class CitizenResponseGenerator:
                  api_key: str = "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",
                  model_name: str = "llama-3.3-70b-versatile",
                  use_local: bool = False,
-                 local_model_path: str = r"C:\Users\PATHU\.cache\huggingface\hub\models--meta-llama--Llama-3.2-3B"):
+                 local_model_path: str = "meta-llama/Llama-3.2-3B"):
         self.model_name = model_name
         self.use_local = use_local
         

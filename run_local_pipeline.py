@@ -17,9 +17,9 @@ def run_local_audit(fir_text: str, fir_id: str = "FIR-LOCAL-001"):
     print("="*50)
 
     # Define the local paths you provided
-    llama_path = r"C:\Users\PATHU\.cache\huggingface\hub\models--meta-llama--Llama-3.2-3B"
-    gist_path = r"C:\Users\PATHU\.cache\huggingface\hub\models--avsolatorio--GIST-large-Embedding-v0"
-    nli_path = r"C:\Users\PATHU\.cache\huggingface\hub\models--cross-encoder--nli-deberta-v3-small"
+    llama_path = "meta-llama/Llama-3.2-3B"
+    gist_path = "avsolatorio/GIST-large-Embedding-v0"
+    nli_path = "cross-encoder/nli-deberta-v3-small"
 
     # Step 1: Extract Sections
     print("\n[1/5] Extracting IPC/BNS Sections...")
