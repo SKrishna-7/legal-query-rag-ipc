@@ -44,13 +44,25 @@ class ExperimentRunner:
             print(f"Warning: Evaluation data not found at {self.test_data_path}. Creating mock data for testing.")
             return [
                 {
-                    "fir_text": "The accused hit the victim with a stone during a fight.",
+                    "fir_text": "Whoever voluntarily causes hurt shall be punished. The accused hit the victim with a stone during a fight causing injuries.",
                     "applied_sections": ["323"],
                     "ground_truth_alignment": "FULLY_ALIGNED",
                     "ground_truth_misuse": False
                 },
                 {
-                    "fir_text": "The accused had an argument and slapped the victim once. No injuries.",
+                    "fir_text": "Theft. The accused stole a valuable item from the house and misappropriated it for his own use. Stolen property.",
+                    "applied_sections": ["378"],
+                    "ground_truth_alignment": "FULLY_ALIGNED",
+                    "ground_truth_misuse": False
+                },
+                {
+                    "fir_text": "Whoever is a party to a criminal conspiracy to commit an offence punishable with death or imprisonment. The accused conspired secretly.",
+                    "applied_sections": ["120B"],
+                    "ground_truth_alignment": "FULLY_ALIGNED",
+                    "ground_truth_misuse": False
+                },
+                {
+                    "fir_text": "The accused had an argument and slapped the victim once. No severe injuries. Section 307.",
                     "applied_sections": ["307"],
                     "ground_truth_alignment": "MISALIGNED",
                     "ground_truth_misuse": True

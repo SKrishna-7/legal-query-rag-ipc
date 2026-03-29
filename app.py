@@ -217,8 +217,8 @@ with st.sidebar:
                         extractor = IPCSectionExtractor()
                         applied_sections = extractor.extract_mentioned_sections(narrative)
                         if not applied_sections:
-                            st.warning("No IPC sections automatically found. Using Section 302 for demonstration.")
-                            applied_sections = ["302"]
+                            st.error("No IPC sections were automatically detected. This may be a non-IPC FIR (e.g., PC Act, NDPS). Please enter the sections manually in the Advanced Settings sidebar.")
+                            st.stop()
                 
                 fir_num = "FIR-" + uploaded_file.name.split('.')[0]
 
