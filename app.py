@@ -209,73 +209,78 @@ with st.sidebar:
     if st.button("🚀 Analyze FIR Document", use_container_width=True, type="primary"):
         if uploaded_file is not None:
             with st.spinner("Processing document & verifying legal context..."):
-                # File Processing
-                if uploaded_file.name.lower().endswith(".pdf"):
-                    narrative = extract_text_from_pdf(uploaded_file)
-                else:
-                    try:
-                        narrative = uploaded_file.read().decode("utf-8")
-                    except UnicodeDecodeError:
-                        uploaded_file.seek(0)
-                        narrative = uploaded_file.read().decode("latin-1", errors="replace")
-                
-                # Section Extraction
-                if manual_sections.strip():
-                    applied_sections = [s.strip() for s in manual_sections.split(',')]
-                else:
-                    with st.spinner("Auto-extracting IPC sections..."):
-                        extractor = IPCSectionExtractor()
-                        applied_sections = extractor.extract_mentioned_sections(narrative)
-                        if not applied_sections:
-                            st.error("No IPC sections were automatically detected. This may be a non-IPC FIR (e.g., PC Act, NDPS). Please enter the sections manually in the Advanced Settings sidebar.")
-                            st.stop()
-                
-                fir_num = "FIR-" + uploaded_file.name.split('.')[0]
+                try:
+                    # File Processing
+                    if uploaded_file.name.lower().endswith(".pdf"):
+                        narrative = extract_text_from_pdf(uploaded_file)
+                    else:
+                        try:
+                            narrative = uploaded_file.read().decode("utf-8")
+                        except UnicodeDecodeError:
+                            uploaded_file.seek(0)
+                            narrative = uploaded_file.read().decode("latin-1", errors="replace")
+                    
+                    # Section Extraction
+                    if manual_sections.strip():
+                        applied_sections = [s.strip() for s in manual_sections.split(',')]
+                    else:
+                        with st.spinner("Auto-extracting IPC sections..."):
+                            extractor = IPCSectionExtractor()
+                            applied_sections = extractor.extract_mentioned_sections(narrative)
+                            if not applied_sections:
+                                st.error("No IPC sections were automatically detected. This may be a non-IPC FIR (e.g., PC Act, NDPS). Please enter the sections manually in the Advanced Settings sidebar.")
+                                st.stop()
+                    
+                    fir_num = "FIR-" + uploaded_file.name.split('.')[0]
 
-                # Run Backend Pipeline
-                cam = IPCContextualAlignmentModule(
-                    groq_api_key=st.session_state.groq_key,
-                    use_local=use_local,
-                    local_model_path=local_model_path
-                )
-                rationale_gen = LegalRationaleGenerator()
-                misuse_engine = MisuseRiskAssessmentEngine()
-                response_gen = CitizenResponseGenerator(
-                    api_key=st.session_state.groq_key,
-                    use_local=use_local,
-                    local_model_path=local_model_path
-                )
+                    # Run Backend Pipeline
+                    cam = IPCContextualAlignmentModule(
+                        groq_api_key=st.session_state.groq_key,
+                        use_local=use_local,
+                        local_model_path=local_model_path
+                    )
+                    rationale_gen = LegalRationaleGenerator()
+                    misuse_engine = MisuseRiskAssessmentEngine()
+                    response_gen = CitizenResponseGenerator(
+                        api_key=st.session_state.groq_key,
+                        use_local=use_local,
+                        local_model_path=local_model_path
+                    )
 
-                # 1. CAM
-                cam_report = cam.generate_full_cam_report(fir_num, applied_sections, narrative)
-                
-                # 2. Rationale
-                fir_rationale = rationale_gen.generate_fir_level_rationale(cam_report)
-                
-                # 3. Misuse
-                misuse_report = misuse_engine.generate_misuse_report(fir_num, cam_report, fir_rationale)
-                
-                # 4. Final Citizen Response
-                final_response = response_gen.generate_full_analysis_response(
-                    fir_num, applied_sections, cam_report, misuse_report, fir_rationale, language=language
-                )
+                    # 1. CAM
+                    cam_report = cam.generate_full_cam_report(fir_num, applied_sections, narrative)
+                    
+                    # 2. Rationale
+                    fir_rationale = rationale_gen.generate_fir_level_rationale(cam_report)
+                    
+                    # 3. Misuse
+                    misuse_report = misuse_engine.generate_misuse_report(fir_num, cam_report, fir_rationale)
+                    
+                    # 4. Final Citizen Response
+                    final_response = response_gen.generate_full_analysis_response(
+                        fir_num, applied_sections, cam_report, misuse_report, fir_rationale, language=language
+                    )
 
-                st.session_state.report_data = {
-                    "cam": cam_report,
-                    "rationale": fir_rationale,
-                    "misuse": misuse_report,
-                    "final": final_response,
-                    "narrative": narrative,
-                    "sections": applied_sections
-                }
-                
-                # Add initial context to chat history
-                st.session_state.chat_history = [
-                    {"role": "assistant", "content": f"Hello! I have completed the legal audit for **{fir_num}**. I detected **{len(applied_sections)}** IPC section(s). The overall misuse risk is evaluated as **{fir_rationale.overall_misuse_risk}**. Feel free to ask me to explain any part of the report!"}
-                ]
-                
-                st.session_state.analysis_done = True
-                st.rerun()
+                    st.session_state.report_data = {
+                        "cam": cam_report,
+                        "rationale": fir_rationale,
+                        "misuse": misuse_report,
+                        "final": final_response,
+                        "narrative": narrative,
+                        "sections": applied_sections
+                    }
+                    
+                    # Add initial context to chat history
+                    st.session_state.chat_history = [
+                        {"role": "assistant", "content": f"Hello! I have completed the legal audit for **{fir_num}**. I detected **{len(applied_sections)}** IPC section(s). The overall misuse risk is evaluated as **{fir_rationale.overall_misuse_risk}**. Feel free to ask me to explain any part of the report!"}
+                    ]
+                    
+                    st.session_state.analysis_done = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Critical Backend Error: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
         else:
             st.error("Please upload an FIR document first.")
             
