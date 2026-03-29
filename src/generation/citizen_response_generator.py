@@ -15,6 +15,11 @@ try:
 except ImportError:
     Groq = None
 
+try:
+    from transformers import pipeline
+except ImportError:
+    pipeline = None
+
 # Import types from previous phases
 import sys
 import os
@@ -36,13 +41,32 @@ class CitizenResponse:
 class CitizenResponseGenerator:
     def __init__(self, 
                  api_key: str = "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",
-                 model_name: str = "llama-3.3-70b-versatile"):
+                 model_name: str = "llama-3.3-70b-versatile",
+                 use_local: bool = False,
+                 local_model_path: str = "meta-llama/Llama-3.2-3B"):
         self.model_name = model_name
+        self.use_local = use_local
+        
         if Groq and api_key:
             self.client = Groq(api_key=api_key)
         else:
             self.client = None
             print("Warning: Groq client not initialized for citizen response generation.")
+
+        # Initialize Local Model
+        self.local_pipeline = None
+        if use_local and pipeline:
+            print(f"Loading local generative model '{local_model_path}'...")
+            try:
+                self.local_pipeline = pipeline(
+                    "text-generation",
+                    model=local_model_path,
+                    device_map="auto",
+                    torch_dtype="auto"
+                )
+            except Exception as e:
+                print(f"Error loading local model: {e}")
+                self.use_local = False
 
     def generate_full_analysis_response(self,
                                          fir_number: str,
@@ -95,43 +119,52 @@ YOUR REPORT SHOULD COVER:
 
 CRITICAL: Maintain a helpful but cautious tone. Do not guarantee any legal outcome.
 """
-        
-        if not self.client:
-            return CitizenResponse(
-                fir_number=fir_number,
-                summary_html="<p>Error: LLM client not available.</p>",
-                summary_markdown="Error: LLM client not available.",
-                language=language
-            )
-            
-        try:
-            chat_completion = self.client.chat.completions.create(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                model=self.model_name,
-                temperature=0.3
-            )
-            
-            markdown_content = chat_completion.choices[0].message.content
-            
-            return CitizenResponse(
-                fir_number=fir_number,
-                summary_html="",
-                summary_markdown=markdown_content,
-                language=language
-            )
-            
-        except Exception as e:
-            print(f"Error generating citizen response: {e}")
-            return CitizenResponse(
-                fir_number=fir_number,
-                summary_html=f"<p>Error: {str(e)}</p>",
-                summary_markdown=f"Error: {str(e)}",
-                language=language
-            )
 
+        if self.use_local and self.local_pipeline:
+            try:
+                # Combined prompt for local model
+                full_prompt = f"System: {system_prompt}\n\nUser: {user_prompt}"
+                outputs = self.local_pipeline(
+                    full_prompt, 
+                    max_new_tokens=1024,
+                    do_sample=True,
+                    temperature=0.3,
+                    return_full_text=False
+                )
+                markdown_content = outputs[0]["generated_text"]
+                return CitizenResponse(fir_number=fir_number, summary_html="", summary_markdown=markdown_content, language=language)
+            except Exception as e:
+                print(f"Local Generation Error: {e}")
+
+        if self.client:
+            try:
+                chat_completion = self.client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    model=self.model_name,
+                    temperature=0.3
+                )
+
+                markdown_content = chat_completion.choices[0].message.content
+
+                return CitizenResponse(
+                    fir_number=fir_number,
+                    summary_html="",
+                    summary_markdown=markdown_content,
+                    language=language
+                )
+
+            except Exception as e:
+                print(f"Error generating citizen response: {e}")
+
+        return CitizenResponse(
+            fir_number=fir_number,
+            summary_html="<p>Error: LLM client not available.</p>",
+            summary_markdown="Error: LLM client not available.",
+            language=language
+        )
 # Standalone testing
 if __name__ == "__main__":
     from ipc_cam.ipc_cam import IPCContextualAlignmentModule

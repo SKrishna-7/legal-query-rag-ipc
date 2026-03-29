@@ -14,6 +14,12 @@ try:
 except ImportError:
     Groq = None
 
+# Import Transformers for local models
+try:
+    from transformers import pipeline
+except ImportError:
+    pipeline = None
+
 # Set page config
 st.set_page_config(
     page_title="Legal IPC-RAG | FIR Audit",
@@ -189,6 +195,10 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Select FIR (PDF or Text)", type=["pdf", "txt"], label_visibility="collapsed")
     
     with st.expander("⚙️ Advanced Settings", expanded=False):
+        inference_source = st.radio("Inference Source", ["Cloud (Groq)", "Local (Llama 3.2 3B)"], index=0)
+        use_local = (inference_source == "Local (Llama 3.2 3B)")
+        local_model_path = st.text_input("Local Model Path", value="meta-llama/Llama-3.2-3B")
+        
         st.markdown("**Manual Section Override:** (Optional, comma-separated)")
         manual_sections = st.text_input("e.g. 302, 323", placeholder="Leave blank to auto-extract")
         language = st.selectbox("Response Language", ["English", "Hindi", "Tamil", "Bengali"])
@@ -223,10 +233,18 @@ with st.sidebar:
                 fir_num = "FIR-" + uploaded_file.name.split('.')[0]
 
                 # Run Backend Pipeline
-                cam = IPCContextualAlignmentModule(groq_api_key=st.session_state.groq_key)
+                cam = IPCContextualAlignmentModule(
+                    groq_api_key=st.session_state.groq_key,
+                    use_local=use_local,
+                    local_model_path=local_model_path
+                )
                 rationale_gen = LegalRationaleGenerator()
                 misuse_engine = MisuseRiskAssessmentEngine()
-                response_gen = CitizenResponseGenerator(api_key=st.session_state.groq_key)
+                response_gen = CitizenResponseGenerator(
+                    api_key=st.session_state.groq_key,
+                    use_local=use_local,
+                    local_model_path=local_model_path
+                )
 
                 # 1. CAM
                 cam_report = cam.generate_full_cam_report(fir_num, applied_sections, narrative)
@@ -385,7 +403,10 @@ else:
         st.markdown("---")
         user_query = st.chat_input("E.g., Can I get bail for these charges?", key="chat_input")
         
-        if user_query and Groq and st.session_state.groq_key:
+        # Determine if we should use local for chat
+        chat_use_local = (inference_source == "Local (Llama 3.2 3B)")
+        
+        if user_query:
             # Append user message
             st.session_state.chat_history.append({"role": "user", "content": user_query})
             st.rerun() # Fast rerun to show user message instantly
@@ -402,27 +423,46 @@ else:
             """
             
             with st.spinner("AI is typing..."):
-                try:
-                    client = Groq(api_key=st.session_state.groq_key)
-                    messages = [{"role": "system", "content": system_prompt}]
-                    
-                    for msg in st.session_state.chat_history[-6:]: # Last 6 msgs
-                        messages.append({"role": msg["role"], "content": msg["content"]})
+                if chat_use_local:
+                    try:
+                        from transformers import pipeline
+                        local_pipe = pipeline("text-generation", model=local_model_path, device_map="auto")
                         
-                    completion = client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
-                        messages=messages,
-                        temperature=0.3
-                    )
-                    
-                    bot_response = completion.choices[0].message.content
-                    st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"API Error: {e}")
-        elif not Groq and user_query:
-            st.error("Groq library not installed. Cannot use chat features.")
+                        full_chat_prompt = f"System: {system_prompt}\n\n"
+                        for msg in st.session_state.chat_history[-4:]:
+                            role = "User" if msg["role"] == "user" else "Assistant"
+                            full_chat_prompt += f"{role}: {msg['content']}\n"
+                        full_chat_prompt += "Assistant: "
+                        
+                        outputs = local_pipe(full_chat_prompt, max_new_tokens=512, do_sample=True, temperature=0.3, return_full_text=False)
+                        bot_response = outputs[0]["generated_text"]
+                        st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Local Model Chat Error: {e}")
+                
+                elif Groq and st.session_state.groq_key:
+                    try:
+                        client = Groq(api_key=st.session_state.groq_key)
+                        messages = [{"role": "system", "content": system_prompt}]
+                        
+                        for msg in st.session_state.chat_history[-6:]: # Last 6 msgs
+                            messages.append({"role": msg["role"], "content": msg["content"]})
+                            
+                        completion = client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=messages,
+                            temperature=0.3
+                        )
+                        
+                        bot_response = completion.choices[0].message.content
+                        st.session_state.chat_history.append({"role": "assistant", "content": bot_response})
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"API Error: {e}")
+                else:
+                    st.error("No inference source available (Groq key missing or transformers not installed).")
             
         st.markdown("</div>", unsafe_allow_html=True)
 

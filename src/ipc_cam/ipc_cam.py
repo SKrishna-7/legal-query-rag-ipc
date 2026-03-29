@@ -28,6 +28,11 @@ try:
 except ImportError:
     Groq = None
 
+try:
+    from transformers import pipeline
+except ImportError:
+    pipeline = None
+
 
 class SatisfactionStatus(Enum):
     SATISFIED = "SATISFIED"
@@ -73,10 +78,13 @@ class IPCContextualAlignmentModule:
                  ipc_kb_path: str = "data/processed/ipc_sections/ipc_complete.json",
                  groq_api_key: str = "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",
                  embedding_model_name: str = "avsolatorio/GIST-large-Embedding-v0",
-                 nli_model_name: str = "cross-encoder/nli-deberta-v3-small"):
+                 nli_model_name: str = "cross-encoder/nli-deberta-v3-small",
+                 use_local: bool = False,
+                 local_model_path: str = "meta-llama/Llama-3.2-3B"):
         
         self.ipc_kb_path = ipc_kb_path
         self.ipc_kb = self._load_ipc_kb()
+        self.use_local = use_local
         
         # Initialize Groq client
         self.groq_api_key = groq_api_key
@@ -85,6 +93,21 @@ class IPCContextualAlignmentModule:
         else:
             self.client = None
             print("Warning: Groq client not initialized.")
+
+        # Initialize Local Model if requested
+        self.local_pipeline = None
+        if use_local and pipeline:
+            print(f"Loading local generative model '{local_model_path}'...")
+            try:
+                self.local_pipeline = pipeline(
+                    "text-generation",
+                    model=local_model_path,
+                    device_map="auto",
+                    torch_dtype="auto"
+                )
+            except Exception as e:
+                print(f"Error loading local model: {e}")
+                self.use_local = False
 
         # Initialize Sentence Transformer for semantic search
         print(f"Loading embedding model '{embedding_model_name}'...")
@@ -153,23 +176,50 @@ class IPCContextualAlignmentModule:
         confidence = 0.0
         reasoning = ""
         
-        if self.client and evidence_sentences:
-            prompt = f"""
-            Analyze if the following FIR evidence satisfies the legal ingredient requirement.
-            
-            Legal Ingredient Requirement: "{ingredient}"
-            
-            Evidence from FIR:
-            {chr(10).join([f'- {s}' for s in evidence_sentences])}
-            
-            Does the evidence satisfy the legal requirement?
-            Answer in the following JSON format:
-            {{
-                "verdict": "SATISFIED" | "PARTIALLY_SATISFIED" | "NOT_SATISFIED",
-                "confidence": 0.0 to 1.0,
-                "reasoning": "Brief legal reasoning"
-            }}
-            """
+        prompt = f"""
+        Analyze if the following FIR evidence satisfies the legal ingredient requirement.
+        
+        Legal Ingredient Requirement: "{ingredient}"
+        
+        Evidence from FIR:
+        {chr(10).join([f'- {s}' for s in evidence_sentences])}
+        
+        Does the evidence satisfy the legal requirement?
+        Answer in the following JSON format:
+        {{
+            "verdict": "SATISFIED" | "PARTIALLY_SATISFIED" | "NOT_SATISFIED",
+            "confidence": 0.0 to 1.0,
+            "reasoning": "Brief legal reasoning"
+        }}
+        """
+
+        if self.use_local and self.local_pipeline and evidence_sentences:
+            try:
+                # Local Llama-3.2 generation
+                outputs = self.local_pipeline(
+                    prompt, 
+                    max_new_tokens=256,
+                    do_sample=False,
+                    return_full_text=False
+                )
+                response_text = outputs[0]["generated_text"]
+                # Extract JSON if needed
+                import re
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    res = json.loads(json_match.group())
+                else:
+                    res = {"verdict": "PARTIALLY_SATISFIED", "confidence": 0.5, "reasoning": "Local model returned non-JSON response"}
+                
+                llm_verdict = res.get("verdict", "NOT_SATISFIED")
+                confidence = float(res.get("confidence", 0.0))
+                reasoning = res.get("reasoning", "")
+            except Exception as e:
+                print(f"Local Model Error: {e}")
+                llm_verdict = "PARTIALLY_SATISFIED"
+                reasoning = f"Error in local inference: {e}"
+
+        elif self.client and evidence_sentences:
             try:
                 chat_completion = self.client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
