@@ -77,10 +77,10 @@ class IPCContextualAlignmentModule:
     def __init__(self,
                  ipc_kb_path: str = "data/processed/ipc_sections/ipc_complete.json",
                  groq_api_key: str = "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",
-                 embedding_model_name: str = "avsolatorio/GIST-large-Embedding-v0",
-                 nli_model_name: str = "cross-encoder/nli-deberta-v3-small",
+                 embedding_model_name: str = r"C:\Users\PATHU\.cache\huggingface\hub\models--avsolatorio--GIST-large-Embedding-v0",
+                 nli_model_name: str = r"C:\Users\PATHU\.cache\huggingface\hub\models--cross-encoder--nli-deberta-v3-small",
                  use_local: bool = False,
-                 local_model_path: str = "meta-llama/Llama-3.2-3B"):
+                 local_model_path: str = r"C:\Users\PATHU\.cache\huggingface\hub\models--meta-llama--Llama-3.2-3B"):
         
         self.ipc_kb_path = ipc_kb_path
         self.ipc_kb = self._load_ipc_kb()

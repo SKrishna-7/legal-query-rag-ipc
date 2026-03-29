@@ -197,7 +197,7 @@ with st.sidebar:
     with st.expander("⚙️ Advanced Settings", expanded=False):
         inference_source = st.radio("Inference Source", ["Cloud (Groq)", "Local (Llama 3.2 3B)"], index=0)
         use_local = (inference_source == "Local (Llama 3.2 3B)")
-        local_model_path = st.text_input("Local Model Path", value="meta-llama/Llama-3.2-3B")
+        local_model_path = st.text_input("Local Model Path", value=r"C:\Users\PATHU\.cache\huggingface\hub\models--meta-llama--Llama-3.2-3B")
         
         st.markdown("**Manual Section Override:** (Optional, comma-separated)")
         manual_sections = st.text_input("e.g. 302, 323", placeholder="Leave blank to auto-extract")
