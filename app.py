@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 import os
+import re
 from pathlib import Path
 import pandas as pd
 import plotly.express as px
@@ -165,11 +166,46 @@ def extract_text_from_pdf(file_bytes):
         pdf_reader = PyPDF2.PdfReader(file_bytes)
         text = ""
         for page in pdf_reader.pages:
-            text += page.extract_text() + "\\n"
+            text += page.extract_text() + "\n"
         return text
     except Exception as e:
         st.error(f"Error reading PDF: {e}")
         return ""
+
+def extract_sections_with_llm(narrative, api_key):
+    """
+    Fallback extraction using LLM for complex table-based FIRs.
+    """
+    if not Groq or not api_key:
+        return []
+    
+    try:
+        client = Groq(api_key=api_key)
+        prompt = f"""
+        Analyze this FIR narrative and extract ONLY the IPC or BNS section numbers applied.
+        Return them as a comma-separated list of numbers (e.g., 302, 323, 34).
+        If no sections are found, return "None".
+        
+        NARRATIVE:
+        {narrative[:2000]}
+        """
+        
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1
+        )
+        
+        response = completion.choices[0].message.content
+        if "None" in response:
+            return []
+            
+        # Extract numbers using regex from the LLM response
+        sections = re.findall(r"\b(\d{1,3}[A-Za-z]?(?:\(\d+\))?)\b", response)
+        return sorted(list(set(sections)))
+    except Exception as e:
+        print(f"LLM Section Extraction Error: {e}")
+        return []
 
 # Initialize Session State
 if 'analysis_done' not in st.session_state:
@@ -226,10 +262,19 @@ with st.sidebar:
                     else:
                         with st.spinner("Auto-extracting IPC sections..."):
                             extractor = IPCSectionExtractor()
+                            # Attempt 1: Fast Regex Extraction
                             applied_sections = extractor.extract_mentioned_sections(narrative)
+                            
+                            # Attempt 2: AI Smart Extraction (The Table Fix!)
                             if not applied_sections:
-                                st.error("No IPC sections were automatically detected. This may be a non-IPC FIR (e.g., PC Act, NDPS). Please enter the sections manually in the Advanced Settings sidebar.")
-                                st.stop()
+                                st.info("Standard extraction missed the sections (likely a table format). Engaging AI scanner...")
+                                # We pass the raw document text to the LLM
+                                applied_sections = extract_sections_with_llm(narrative, st.session_state.groq_key)
+                                
+                    # If both Regex and AI fail, THEN we stop.
+                    if not applied_sections:
+                        st.error("No IPC sections were automatically detected. This may be a non-IPC FIR (e.g., PC Act, NDPS). Please enter the sections manually in the Advanced Settings sidebar.")
+                        st.stop()
                     
                     fir_num = "FIR-" + uploaded_file.name.split('.')[0]
 

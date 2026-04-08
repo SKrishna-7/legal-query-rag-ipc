@@ -288,12 +288,21 @@ class FIRPreprocessor:
 
     def _extract_narrative(self, text: str) -> str:
         """Extract the FIR narrative/facts section."""
+        if not text or len(text.strip()) < 50:
+            return "" # Explicitly handle near-blank docs
+
         start_idx = 0
         for marker in self.NARRATIVE_MARKERS_START:
             m = re.search(marker, text, re.IGNORECASE)
             if m:
                 start_idx = m.end()
                 break
+
+        # CCTNS Table Handling: If start_idx is still 0, look for common CCTNS table markers
+        if start_idx == 0:
+            cctns_match = re.search(r"15\.?\s*First\s+Information\s+contents", text, re.IGNORECASE)
+            if cctns_match:
+                start_idx = cctns_match.end()
 
         end_idx = len(text)
         for marker in self.NARRATIVE_MARKERS_END:
