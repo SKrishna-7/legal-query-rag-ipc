@@ -35,11 +35,11 @@ def run_local_audit(fir_text: str, fir_id: str = "FIR-LOCAL-001"):
     print("\n[2/5] Running Contextual Alignment Module (IPC-CAM)...")
     print("      (Loading local embeddings, NLI, and Llama 3.2...)")
     cam = IPCContextualAlignmentModule(
-        use_local=True,
+        use_local=False,
         local_model_path=llama_path,
         embedding_model_name=gist_path,
         nli_model_name=nli_path,
-        groq_api_key="" # Not needed when use_local=True
+        groq_api_key=os.environ.get("GROQ_API_KEY", "")
     )
     cam_report = cam.generate_full_cam_report(fir_id, applied_sections, fir_text)
     print(f"✅ Alignment Score: {sum(s.alignment_score for s in cam_report.sections_evaluated)/len(cam_report.sections_evaluated)*100:.1f}%")
@@ -59,9 +59,8 @@ def run_local_audit(fir_text: str, fir_id: str = "FIR-LOCAL-001"):
     # Step 5: Citizen Response Generation
     print("\n[5/5] Generating Final Citizen Report via Local Llama 3.2...")
     response_gen = CitizenResponseGenerator(
-        use_local=True,
-        local_model_path=llama_path,
-        api_key="" # Not needed
+        use_local=False,
+        api_key=os.environ.get("GROQ_API_KEY", "")
     )
     final_response = response_gen.generate_full_analysis_response(
         fir_id, applied_sections, cam_report, misuse_report, fir_rationale, language="English"

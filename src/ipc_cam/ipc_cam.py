@@ -261,6 +261,54 @@ class IPCContextualAlignmentModule:
         """Evaluate how well the FIR facts align with the given IPC section."""
         
         if section_number not in self.ipc_kb:
+            print(f"Section {section_number} not in IPC KB. Falling back to Generative Evaluation.")
+            if self.client:
+                try:
+                    prompt = f"""
+                    You are a legal expert evaluating an FIR. The police have applied 'Section {section_number}' 
+                    (This might be a non-IPC section like PC Act, NDPS, POCSO, etc.).
+                    
+                    FIR Narrative:
+                    {fir_narrative[:3000]}
+                    
+                    Does the narrative provide sufficient factual evidence to justify charging someone under 'Section {section_number}'?
+                    
+                    Respond strictly in JSON format:
+                    {{
+                        "alignment_score": (float between 0.0 and 1.0, where 1.0 means perfectly justified and 0.0 means completely unjustified),
+                        "reasoning": "Brief legal reasoning explaining why it is or isn't justified based on the text."
+                    }}
+                    """
+                    completion = self.client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={"type": "json_object"},
+                        temperature=0.1
+                    )
+                    import json
+                    result = json.loads(completion.choices[0].message.content)
+                    score = float(result.get("alignment_score", 0.0))
+                    reasoning = result.get("reasoning", "LLM Evaluation completed.")
+                    
+                    if score >= 0.8:
+                        status = AlignmentStatus.FULLY_ALIGNED
+                    elif score >= 0.4:
+                        status = AlignmentStatus.PARTIALLY_ALIGNED
+                    else:
+                        status = AlignmentStatus.MISALIGNED
+                        
+                    return SectionAlignmentResult(
+                        section_number=f"{section_number} (Non-IPC)",
+                        alignment_status=status,
+                        alignment_score=score,
+                        ingredient_scores=[],
+                        missing_ingredients=[],
+                        partial_ingredients=[],
+                        alignment_reasoning=f"Generative Evaluation: {reasoning}"
+                    )
+                except Exception as e:
+                    print(f"Generative fallback failed: {e}")
+
             return SectionAlignmentResult(
                 section_number=section_number,
                 alignment_status=AlignmentStatus.MISALIGNED,
