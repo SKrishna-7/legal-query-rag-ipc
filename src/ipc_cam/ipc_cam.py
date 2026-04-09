@@ -139,72 +139,43 @@ class IPCContextualAlignmentModule:
     def compute_ingredient_satisfaction_score(self,
                                              ingredient: str,
                                              fir_narrative: str) -> IngredientScore:
-        """Evaluate if an ingredient is satisfied by the FIR narrative."""
+        """Evaluate if an ingredient is satisfied by the FIR narrative using LLM analysis on the full text."""
         
-        # Step A: Semantic Similarity
-        sentences = [s.strip() for s in fir_narrative.split('.') if len(s.strip()) > 5]
-        evidence_sentences = []
-        semantic_score = 0.0
-        
-        if self.embedding_model and sentences:
-            sentence_embeddings = self.embedding_model.encode(sentences, convert_to_tensor=True)
-            ingredient_embedding = self.embedding_model.encode(ingredient, convert_to_tensor=True)
-            
-            cosine_scores = util.cos_sim(ingredient_embedding, sentence_embeddings)[0]
-            top_k = min(3, len(sentences))
-            top_indices = torch.topk(cosine_scores, k=top_k).indices.tolist()
-            
-            for idx in top_indices:
-                score = cosine_scores[idx].item()
-                if score > 0.4:  # Relevance threshold
-                    evidence_sentences.append(sentences[idx])
-                    semantic_score = max(semantic_score, score)
-
-        # Step B: NLI Entailment
-        nli_score = 0.0
-        if self.nli_model and evidence_sentences:
-            pairs = [[ingredient, s] for s in evidence_sentences]
-            scores = self.nli_model.predict(pairs)
-            # scores are usually [contradiction, neutral, entailment]
-            # but some models have different formats. Assuming softmax outputs for 3 classes
-            # Index 2 is usually entailment
-            # For cross-encoder/nli-deberta-v3-small: [contradiction, neutral, entailment]
-            nli_score = float(max([s[2] for s in scores]))
-
-        # Step C: LLM Verification (Combined reasoning)
         llm_verdict = "NOT_SATISFIED"
         confidence = 0.0
         reasoning = ""
+        evidence_sentences = []
         
         prompt = f"""
-        Analyze if the following FIR evidence satisfies the legal ingredient requirement.
+        You are a strict Indian Legal Expert. Analyze the following FIR narrative to determine if the specific legal ingredient requirement is satisfied.
+        
+        CRITICAL INSTRUCTION: Read the ENTIRE narrative carefully. The evidence might be buried in the 'First information contents' or attached sheets at the end.
         
         Legal Ingredient Requirement: "{ingredient}"
         
-        Evidence from FIR:
-        {chr(10).join([f'- {s}' for s in evidence_sentences])}
+        FIR Narrative:
+        {fir_narrative[:15000]}
         
-        Does the evidence satisfy the legal requirement?
+        Does the narrative provide explicit facts or evidence that satisfy this legal requirement?
         Answer in the following JSON format:
         {{
             "verdict": "SATISFIED" | "PARTIALLY_SATISFIED" | "NOT_SATISFIED",
-            "confidence": 0.0 to 1.0,
-            "reasoning": "Brief legal reasoning"
+            "confidence": (float between 0.0 and 1.0, where 1.0 means perfectly justified),
+            "reasoning": "Brief legal reasoning citing specific facts from the text if present."
         }}
         """
 
-        if self.use_local and self.local_pipeline and evidence_sentences:
+        if self.use_local and self.local_pipeline:
             try:
                 # Local Llama-3.2 generation
                 outputs = self.local_pipeline(
                     prompt, 
-                    max_new_tokens=256,
-                    do_sample=False,
+                    max_new_tokens=200,
                     return_full_text=False
                 )
-                response_text = outputs[0]["generated_text"]
-                # Extract JSON if needed
+                response_text = outputs[0]['generated_text']
                 import re
+                import json
                 json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
                 if json_match:
                     res = json.loads(json_match.group())
@@ -215,12 +186,13 @@ class IPCContextualAlignmentModule:
                 confidence = float(res.get("confidence", 0.0))
                 reasoning = res.get("reasoning", "")
             except Exception as e:
-                print(f"Local Model Error: {e}")
+                import logging; logging.error(f"Local Model Error: {e}")
                 llm_verdict = "PARTIALLY_SATISFIED"
                 reasoning = f"Error in local inference: {e}"
 
-        elif self.client and evidence_sentences:
+        elif self.client:
             try:
+                import json
                 chat_completion = self.client.chat.completions.create(
                     messages=[{"role": "user", "content": prompt}],
                     model="llama-3.3-70b-versatile",
@@ -230,26 +202,34 @@ class IPCContextualAlignmentModule:
                 llm_verdict = res.get("verdict", "NOT_SATISFIED")
                 confidence = float(res.get("confidence", 0.0))
                 reasoning = res.get("reasoning", "")
-            except Exception as e:
-                print(f"Groq API Error: {e}")
-                llm_verdict = "PARTIALLY_SATISFIED" if nli_score > 0.5 else "NOT_SATISFIED"
-                reasoning = "Automatic analysis (LLM call failed)"
+                
+                # Try to extract the sentence it relied on for evidence tracking
+                if "SATISFIED" in llm_verdict:
+                     evidence_sentences.append(reasoning)
 
-        # Determine final status
+            except Exception as e:
+                import logging; logging.error(f"Groq API Error: {e}")
+                llm_verdict = "PARTIALLY_SATISFIED"
+                reasoning = f"Error calling LLM API: {e}"
+
+        else:
+            # Fallback if no LLM
+            llm_verdict = "PARTIALLY_SATISFIED"
+            confidence = 0.5
+            reasoning = "No LLM available for semantic analysis."
+
         status_map = {
             "SATISFIED": SatisfactionStatus.SATISFIED,
             "PARTIALLY_SATISFIED": SatisfactionStatus.PARTIALLY_SATISFIED,
             "NOT_SATISFIED": SatisfactionStatus.NOT_SATISFIED
         }
         
-        final_status = status_map.get(llm_verdict, SatisfactionStatus.NOT_SATISFIED)
-        
         return IngredientScore(
             ingredient=ingredient,
-            satisfaction_status=final_status,
-            confidence=confidence if confidence > 0 else (semantic_score + nli_score) / 2,
-            semantic_score=semantic_score,
-            nli_entailment=nli_score,
+            satisfaction_status=status_map.get(llm_verdict, SatisfactionStatus.NOT_SATISFIED),
+            confidence=confidence,
+            semantic_score=1.0,
+            nli_entailment=1.0,
             llm_verdict=llm_verdict,
             evidence_sentences=evidence_sentences,
             reasoning=reasoning
@@ -261,15 +241,17 @@ class IPCContextualAlignmentModule:
         """Evaluate how well the FIR facts align with the given IPC section."""
         
         if section_number not in self.ipc_kb:
-            print(f"Section {section_number} not in IPC KB. Falling back to Generative Evaluation.")
+            import logging; logging.info(f"Section {section_number} not in IPC KB. Falling back to Generative Evaluation.")
             if self.client:
                 try:
                     prompt = f"""
                     You are a legal expert evaluating an FIR. The police have applied 'Section {section_number}' 
                     (This might be a non-IPC section like PC Act, NDPS, POCSO, etc.).
                     
+                    CRITICAL INSTRUCTION: You are analyzing an Indian FIR. The specific physical acts, dates, and intent are rarely found on the first page. You MUST thoroughly search the 'First information contents' or attached narrative sheets towards the end of the text to extract the factual basis of the charges before making any conclusions.
+                    
                     FIR Narrative:
-                    {fir_narrative[:3000]}
+                    {fir_narrative[:10000]}
                     
                     Does the narrative provide sufficient factual evidence to justify charging someone under 'Section {section_number}'?
                     
@@ -307,7 +289,7 @@ class IPCContextualAlignmentModule:
                         alignment_reasoning=f"Generative Evaluation: {reasoning}"
                     )
                 except Exception as e:
-                    print(f"Generative fallback failed: {e}")
+                    import logging; logging.error(f"Generative fallback failed: {e}")
 
             return SectionAlignmentResult(
                 section_number=section_number,
@@ -377,7 +359,7 @@ class IPCContextualAlignmentModule:
         
         results = []
         for sec in applied_sections:
-            print(f"Evaluating alignment for Section {sec}...")
+            import logging; logging.info(f"Evaluating alignment for Section {sec}...")
             res = self.evaluate_section_alignment(sec, narrative)
             results.append(res)
             

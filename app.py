@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 from enum import Enum
 from dataclasses import asdict
-import PyPDF2
+import fitz
 
 # Import Groq for the chat box
 try:
@@ -163,10 +163,10 @@ from src.preprocessing.ipc_extractor import IPCSectionExtractor
 # Helper function to extract text from PDF
 def extract_text_from_pdf(file_bytes):
     try:
-        pdf_reader = PyPDF2.PdfReader(file_bytes)
+        doc = fitz.open(stream=file_bytes.read(), filetype="pdf")
         text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() + "\n"
+        for page in doc:
+            text += page.get_text("text") + "\n"
         return text
     except Exception as e:
         st.error(f"Error reading PDF: {e}")
@@ -182,12 +182,20 @@ def extract_sections_with_llm(narrative, api_key):
     try:
         client = Groq(api_key=api_key)
         prompt = f"""
-        Analyze this FIR narrative and extract ONLY the IPC or BNS section numbers applied.
-        Return them as a comma-separated list of numbers (e.g., 302, 323, 34).
+        You are analyzing an Indian FIR. The specific physical acts, dates, and intent are rarely found on the first page. 
+        You MUST thoroughly search the 'First information contents' or attached narrative sheets at the end of the document.
+        
+        Analyze this FIR document and extract ONLY the sections applied. 
+        CRITICAL FORMATTING RULES:
+        - For IPC sections, just return the number (e.g., "302", "120B").
+        - For Prevention of Corruption (PC) Act sections, prefix with "PC " (e.g., "PC 7", "PC 12").
+        - For BNS sections, prefix with "BNS " (e.g., "BNS 61").
+        
+        Return them as a comma-separated list (e.g., 302, PC 7, BNS 61).
         If no sections are found, return "None".
         
         NARRATIVE:
-        {narrative[:2000]}
+        {narrative[:10000]}
         """
         
         completion = client.chat.completions.create(
@@ -200,11 +208,14 @@ def extract_sections_with_llm(narrative, api_key):
         if "None" in response:
             return []
             
-        # Extract numbers using regex from the LLM response
-        sections = re.findall(r"\b(\d{1,3}[A-Za-z]?(?:\(\d+\))?)\b", response)
-        return sorted(list(set(sections)))
+        # Extract numbers and prefixes using regex from the LLM response
+        # Matches formats like "302", "120B", "PC 7", "PC 7A", "BNS 61"
+        sections = [s.strip() for s in response.split(',')]
+        # Clean up any quotes or brackets the LLM might add
+        clean_sections = [re.sub(r'[^A-Za-z0-9\s]', '', s).strip() for s in sections]
+        return sorted(list(set(clean_sections)))
     except Exception as e:
-        print(f"LLM Section Extraction Error: {e}")
+        st.error(f"LLM Section Extraction Error: {e}")
         return []
 
 # Initialize Session State
