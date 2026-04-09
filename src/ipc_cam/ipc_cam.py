@@ -76,7 +76,7 @@ class IPCCAMReport:
 class IPCContextualAlignmentModule:
     def __init__(self,
                  ipc_kb_path: str = "data/processed/ipc_sections/ipc_complete.json",
-                 groq_api_key: str = "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",
+                 groq_api_key: str = "",
                  embedding_model_name: str = "avsolatorio/GIST-large-Embedding-v0",
                  nli_model_name: str = "cross-encoder/nli-deberta-v3-small",
                  use_local: bool = False,

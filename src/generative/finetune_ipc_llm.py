@@ -47,7 +47,7 @@ class IPCDataGenerator:
     """Generates synthetic instruction-response pairs for IPC fine-tuning."""
     def __init__(self, 
                  ipc_kb_path: str = "data/processed/ipc_sections/ipc_complete_enhanced.json",
-                 api_key: str = "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"):
+                 api_key: str = ""):
         self.ipc_kb = self._load_kb(ipc_kb_path)
         if Groq and api_key:
             self.client = Groq(api_key=api_key)

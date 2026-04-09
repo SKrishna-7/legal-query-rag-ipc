@@ -6,7 +6,7 @@ from groq import Groq
 from tqdm import tqdm
 
 # Configure paths and API
-GROQ_API_KEY = "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"
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 INPUT_PATH = "data/processed/ipc_sections/ipc_sections_list.json"
 OUTPUT_PATH = "data/processed/ipc_sections/ipc_complete.json"
 INDIVIDUAL_DIR = "data/processed/ipc_sections/individual"

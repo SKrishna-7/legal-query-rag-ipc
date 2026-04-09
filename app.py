@@ -238,7 +238,7 @@ with st.sidebar:
         st.markdown("**Manual Section Override:** (Optional, comma-separated)")
         manual_sections = st.text_input("e.g. 302, 323", placeholder="Leave blank to auto-extract")
         language = st.selectbox("Response Language", ["English", "Hindi", "Tamil", "Bengali"])
-        st.session_state.groq_key = st.text_input("Groq API Key", value="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", type="password")
+        st.session_state.groq_key = st.text_input("Groq API Key", value="", type="password")
     
     st.markdown("<br>", unsafe_allow_html=True)
     

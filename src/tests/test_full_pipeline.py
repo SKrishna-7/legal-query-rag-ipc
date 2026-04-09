@@ -4,7 +4,7 @@ from src.analysis.misuse_detection import MisuseDetectionEngine
 from src.analysis.rationale_generator import LegalRationaleGenerator
 
 # Your working API key
-API_KEY = "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"
+API_KEY = ""
 
 # Sample FIR data for testing (Conspiracy case with missing elements)
 TEST_CASE = {

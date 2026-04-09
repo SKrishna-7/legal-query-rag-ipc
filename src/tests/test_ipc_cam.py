@@ -2,7 +2,7 @@ import json
 from src.analysis.ipc_cam_module import IPCCAMModule
 
 # Your working API key
-API_KEY = "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"
+API_KEY = ""
 
 # Sample FIR data for testing
 TEST_CASE = {

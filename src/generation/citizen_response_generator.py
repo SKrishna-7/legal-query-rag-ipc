@@ -40,7 +40,7 @@ class CitizenResponse:
 
 class CitizenResponseGenerator:
     def __init__(self, 
-                 api_key: str = "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",
+                 api_key: str = "",
                  model_name: str = "llama-3.3-70b-versatile",
                  use_local: bool = False,
                  local_model_path: str = "meta-llama/Llama-3.2-3B"):
